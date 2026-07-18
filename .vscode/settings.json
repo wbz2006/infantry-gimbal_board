@@ -1,0 +1,24 @@
+{
+    "files.associations": {
+        "stm32f4xx_hal_def.h": "c",
+        "bsp_usb.h": "c",
+        "usb_device.h": "c",
+        "usbd_cdc.h": "c",
+        "usbd_conf.h": "c",
+        "usbd_desc.h": "c",
+        "usbd_cdc_if.h": "c",
+        "chassis.h": "c",
+        "remote_control.h": "c",
+        "arm_math.h": "c",
+        "can_comm.h": "c",
+        "dji_motor.h": "c",
+        "bsp_log.h": "c"
+    },
+    "terminal.integrated.profiles.windows": {
+    "mysys2-mingw64": {
+      "path": "cmd.exe", // 意思是使用cmd作为父进程启动终端
+      "args": ["/c","C:\\msys64\\msys2_shell.cmd -defterm -mingw64 -no-start -here"]
+        // msys2_shell.cmd在msys的安装目录下，这里要改为你自己的目录
+    }
+  }
+}

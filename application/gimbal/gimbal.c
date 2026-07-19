@@ -30,17 +30,16 @@ void GimbalInit()
     Motor_Init_Config_s yaw_config = {
         .can_init_config = {
             .can_handle = &hcan1,
-            .tx_id = 2,
+            .tx_id = 4,
         },
         .controller_param_init_config = {
             .angle_PID = {
                 .Kp = 8, // 8
                 .Ki = 0,
-                .Kd = 0,
+                .Kd = 1,
                 .DeadBand = 0.1,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
-
                 .MaxOut = 500,
             },
             .speed_PID = {
@@ -73,7 +72,7 @@ void GimbalInit()
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = 0.5, // 10
+                .Kp = 0.5,
                 .Ki = 0,
                 .Kd = 0,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
@@ -81,9 +80,9 @@ void GimbalInit()
                 .MaxOut = 10,
             },
             .speed_PID = {
-                .Kp = 0.3,  // 50
-                .Ki = 0, // 350
-                .Kd = 0,   // 0
+                .Kp = 0.3,  
+                .Ki = 0, 
+                .Kd = 0,   
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 0,
                 .MaxOut = 1.5,
@@ -148,12 +147,12 @@ void GimbalTask()
     DMMotorSetRef(pitch_motor, -5); // pitch电机的反馈使用IMU的pitch角度,不再使用电机的角度反馈
 
     
-    // DJIMotorEnable(yaw_motor);
-    // DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
-    // DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
-    // DJIMotorSetRef(yaw_motor, 90); // yaw
+    DJIMotorEnable(yaw_motor);
+    DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
+    DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
+    DJIMotorSetRef(yaw_motor, 20); // yaw
     
-    SEGGER_RTT_printf(0, "pitch:%d, Gyro[0]:%d, velocity:%d\n", (int16_t)gimbal_IMU_data->Pitch, (int16_t)gimbal_IMU_data->Gyro[0], (int16_t)pitch_motor->measure.velocity);
+    SEGGER_RTT_printf(0, "yaw:%d, Gyro[2]:%d, velocity:%d\n", (int16_t)gimbal_IMU_data->Yaw, (int16_t)gimbal_IMU_data->Gyro[2], (int16_t)yaw_motor->measure.speed_aps);
 
     
     // switch (gimbal_cmd_recv.gimbal_mode)

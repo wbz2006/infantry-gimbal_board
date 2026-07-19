@@ -153,16 +153,12 @@ static void CalcOffsetAngle()
 }
 
 /**
- * @brief 对云台角度进行软件限位，防止超出机械边界
+ * @brief 对云台角度进行软件限位，防止超出机械边界(硬截断)
  *        目前仅对 pitch 做限幅，yaw 可无限旋转
  */
 static void GimbalAngleLimit()
 {
-    gimbal_cmd_send.pitch = float_constrain(
-        gimbal_cmd_send.pitch,
-        PITCH_MIN_ANGLE,
-        PITCH_MAX_ANGLE
-    );
+    gimbal_cmd_send.pitch = float_constrain(gimbal_cmd_send.pitch, PITCH_MIN_ANGLE, PITCH_MAX_ANGLE);
 }
 
 
@@ -193,10 +189,9 @@ static void RemoteControlSet()
     // 左侧开关状态为[下],或视觉未识别到目标,纯遥控器拨杆控制
     if (switch_is_down(rc_data[TEMP].rc.switch_left) || vision_recv_data->target_state == NO_TARGET)
     { // 按照摇杆的输出大小进行角度增量,增益系数需调整
-        gimbal_cmd_send.yaw += 0.005f * (float)rc_data[TEMP].rc.rocker_l_;
-        gimbal_cmd_send.pitch += 0.001f * (float)rc_data[TEMP].rc.rocker_l1;
+        gimbal_cmd_send.yaw += 0.001f * (float)rc_data[TEMP].rc.rocker_l_;
+        gimbal_cmd_send.pitch += 0.0005f * (float)rc_data[TEMP].rc.rocker_l1;
     }
-    // 云台软件限位
 
     // 底盘参数,目前没有加入小陀螺(调试似乎暂时没有必要),系数需要调整
     chassis_cmd_send.vx = 10.0f * (float)rc_data[TEMP].rc.rocker_r_; // _水平方向
@@ -326,7 +321,7 @@ static void EmergencyHandler()
         shoot_cmd_send.load_mode = LOAD_STOP;
         LOGERROR("[CMD] emergency stop!");
     }
-    // 遥控器右侧开关为[上],恢复正常运行
+    // 遥控器右侧开关为[上]和[中],恢复正常运行
     if (switch_is_up(rc_data[TEMP].rc.switch_right) || switch_is_mid(rc_data[TEMP].rc.switch_right))
     {
         robot_state = ROBOT_READY;

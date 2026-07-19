@@ -360,6 +360,8 @@ void RobotCMDTask()
     else if (switch_is_up(rc_data[TEMP].rc.switch_left)) // 遥控器左侧开关状态为[上],键盘控制
         MouseKeySet();
 
+    GimbalAngleLimit(); // 对云台角度进行软件限位,防止超出机械边界
+    
     EmergencyHandler(); // 处理模块离线和遥控器急停等紧急情况
 
     // 设置视觉发送数据,还需增加加速度和角速度数据

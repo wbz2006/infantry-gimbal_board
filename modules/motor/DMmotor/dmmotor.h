@@ -19,10 +19,10 @@ typedef struct
 {
     uint8_t id;
     uint8_t state;
-    float velocity;
+    float velocity;                     // 电机速度(rad/s)
     float last_position;
     float position;
-    float torque;
+    float torque;                       // 电机力矩(N.m)
     float T_Mos;
     float T_Rotor;
     int32_t total_round;

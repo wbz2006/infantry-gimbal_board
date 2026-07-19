@@ -73,24 +73,24 @@ void GimbalInit()
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = 10, // 10
+                .Kp = 0.5, // 10
                 .Ki = 0,
                 .Kd = 0,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
                 .IntegralLimit = 100,
-                .MaxOut = 500,
+                .MaxOut = 10,
             },
             .speed_PID = {
-                .Kp = 50,  // 50
-                .Ki = 350, // 350
+                .Kp = 0.3,  // 50
+                .Ki = 0, // 350
                 .Kd = 0,   // 0
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
-                .IntegralLimit = 2500,
-                .MaxOut = 20000,
+                .IntegralLimit = 0,
+                .MaxOut = 1.5,
             },
             .other_angle_feedback_ptr = &gimbal_IMU_data->Pitch,
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
-            .other_speed_feedback_ptr = (&gimbal_IMU_data->Gyro[1]),
+            .other_speed_feedback_ptr = (&gimbal_IMU_data->Gyro[0]),
         },
         .controller_setting_init_config = {
             .angle_feedback_source = OTHER_FEED,
@@ -98,6 +98,7 @@ void GimbalInit()
             .outer_loop_type = ANGLE_LOOP,
             .close_loop_type = SPEED_LOOP | ANGLE_LOOP,
             .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,
+            .feedback_reverse_flag = FEEDBACK_DIRECTION_REVERSE,
         },
         .motor_type = DM4310,
     };
@@ -152,7 +153,7 @@ void GimbalTask()
     // DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
     // DJIMotorSetRef(yaw_motor, 90); // yaw
     
-    SEGGER_RTT_printf(0, "roll:%d, pitch:%d, yaw:%d\n", (int16_t)gimbal_IMU_data->Roll, (int16_t)gimbal_IMU_data->Pitch, (int16_t)gimbal_IMU_data->Yaw);
+    SEGGER_RTT_printf(0, "pitch:%d, Gyro[0]:%d, velocity:%d\n", (int16_t)gimbal_IMU_data->Pitch, (int16_t)gimbal_IMU_data->Gyro[0], (int16_t)pitch_motor->measure.velocity);
 
     
     // switch (gimbal_cmd_recv.gimbal_mode)

@@ -235,7 +235,7 @@ void DMMotorControl()
 }
 
 
-
+/*
 
 //@Todo: 目前只实现了力控，更多位控PID等请自行添加
 void DMMotorTask(void const *argument)
@@ -294,3 +294,5 @@ void DMMotorControlInit()
         dm_task_handle[i] = osThreadCreate(osThread(dm_task_name), dm_motor_instance[i]);
     }
 }
+
+*/

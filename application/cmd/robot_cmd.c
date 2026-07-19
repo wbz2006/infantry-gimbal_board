@@ -1,5 +1,6 @@
 // app
 #include "robot_def.h"
+#include "user_lib.h"
 #include "robot_cmd.h"
 // module
 #include "remote_control.h"

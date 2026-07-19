@@ -152,6 +152,20 @@ static void CalcOffsetAngle()
 }
 
 /**
+ * @brief 对云台角度进行软件限位，防止超出机械边界
+ *        目前仅对 pitch 做限幅，yaw 可无限旋转
+ */
+static void GimbalAngleLimit()
+{
+    gimbal_cmd_send.pitch = float_constrain(
+        gimbal_cmd_send.pitch,
+        PITCH_MIN_ANGLE,
+        PITCH_MAX_ANGLE
+    );
+}
+
+
+/**
  * @brief 控制输入为遥控器(调试时)的模式和控制量设置
  *
  */

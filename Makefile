@@ -151,6 +151,7 @@ modules/can_comm/can_comm.c \
 modules/message_center/message_center.c \
 modules/daemon/daemon.c \
 modules/alarm/buzzer.c \
+modules/serial_print/serial_print.c \
 application/gimbal/gimbal.c \
 application/chassis/chassis.c \
 application/shoot/shoot.c \
@@ -266,6 +267,7 @@ C_INCLUDES =  \
 -Imodules/message_center \
 -Imodules/daemon \
 -Imodules/alarm \
+-Imodules/serial_print \
 -Imodules  \
 -IMiddlewares/ST/ARM/DSP/Inc
 

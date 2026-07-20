@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file serial_print.h
  * @brief 基于 BSP USART 层的串口打印模块
  *

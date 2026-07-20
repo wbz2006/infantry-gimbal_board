@@ -8,6 +8,7 @@
 #include "bmi088.h"
 #include "can_comm.h"
 #include "serial_print.h"
+#include "usart.h"
 /*云台外设定义*/
 static attitude_t *gimbal_IMU_data; // 云台IMU数据
 static DJIMotorInstance *yaw_motor;
@@ -153,10 +154,10 @@ void GimbalTask()
     // DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
     // DJIMotorSetRef(yaw_motor, 20); // yaw
     
-    SEGGER_RTT_printf(0, "yaw:%d, Gyro[2]:%d, velocity:%d\n", (int16_t)gimbal_IMU_data->Yaw, (int16_t)gimbal_IMU_data->Gyro[2], (int16_t)yaw_motor->measure.speed_aps);
+    //SEGGER_RTT_printf(0, "yaw:%d, Gyro[2]:%d, velocity:%d\n", (int16_t)gimbal_IMU_data->Yaw, (int16_t)gimbal_IMU_data->Gyro[2], (int16_t)yaw_motor->measure.speed_aps);
+    SerialPrintf("%d,%d,%d\r\n", (int16_t)gimbal_IMU_data->Roll, (int16_t)gimbal_IMU_data->Yaw, (int16_t)gimbal_IMU_data->Pitch);
 
-    SerialPrint("22\r\n", 4);
-    
+
     // switch (gimbal_cmd_recv.gimbal_mode)
     // {
     // // 停止

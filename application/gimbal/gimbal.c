@@ -9,6 +9,8 @@
 #include "can_comm.h"
 #include "serial_print.h"
 
+#define YAW_SPEED_FF_K 2.0f
+
 /*云台外设定义*/
 static attitude_t *gimbal_IMU_data; // 云台IMU数据
 static DJIMotorInstance *yaw_motor;
@@ -23,8 +25,71 @@ static Subscriber_t *chassis_imu_sub;       // 底盘IMU消息订阅者
 static attitude_t chassis_imu_recv;         // 接收的底盘IMU数据
 /*云台控制算法定义*/
 static GimbalComp_t gimbal_comp;
+// 速度前馈
+static float yaw_speed_feedforward  = 0.0f;
+
 
 // static BMI088Instance *bmi088; // 云台IMU
+
+
+static void GimbalStabilityCalc(const attitude_t *gimbal_imu_data, const attitude_t *chassis_imu_data, GimbalComp_t *gimbal_comp)
+{
+    
+    float fb_yaw = gimbal_imu_data->Gyro[2];   // Z轴 → yaw角速度
+
+    float fb_pitch = gimbal_imu_data->Gyro[1];   // Y轴 → pitch角速度
+
+
+    float yaw_rad = chassis_imu_data->Yaw * PI / 180.0f;
+
+    float ff_yaw = -chassis_imu_data->Gyro[2];
+
+    float ff_pitch = sinf(yaw_rad) * chassis_imu_data->Gyro[0] - cosf(yaw_rad) * chassis_imu_data->Gyro[1];
+
+    gimbal_comp->yaw_speed = fb_yaw;// + ff_yaw;
+
+    gimbal_comp->pitch_speed = fb_pitch;// + ff_pitch;
+
+    //后续补充重力补偿力矩，阻力补偿力矩，加速度补偿力矩计算,主要是pitch电机的重力补偿,需要知道pitch电机的安装角度和配重质量
+    //该函数只实现对速控云台的自稳控制
+}
+
+/**
+ * @brief yaw轴速度前馈
+ *
+ * @param target_yaw 遥控器的控制角度
+ * 
+ */
+static float YawSpeedFeedforwardUpdate(float target_yaw)
+{
+    static float last_target_yaw = 0.0f;
+    static uint32_t last_tick = 0;
+    static uint8_t initialized = 0;
+
+    float dt = DWT_GetDeltaT(&last_tick);
+
+    if (!initialized)
+    {
+        initialized = 1;
+        last_target_yaw = target_yaw;
+        yaw_speed_feedforward = 0.0f;
+        return yaw_speed_feedforward;
+    }
+
+    if (dt > 0.0001f && dt < 0.02f)
+    {
+        yaw_speed_feedforward = (target_yaw - last_target_yaw) / dt;
+        LIMIT_MIN_MAX(yaw_speed_feedforward, -300.0f, 300.0f);
+    }
+    else
+    {
+        yaw_speed_feedforward = 0.0f;
+    }
+
+    last_target_yaw = target_yaw;
+    return YAW_SPEED_FF_K * yaw_speed_feedforward;
+}
+
 void GimbalInit()
 {   
     gimbal_IMU_data = INS_Init(); // IMU先初始化,获取姿态数据指针赋给yaw电机的其他数据来源
@@ -55,6 +120,7 @@ void GimbalInit()
             .other_angle_feedback_ptr = &gimbal_IMU_data->YawTotalAngle,
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
             .other_speed_feedback_ptr = &gimbal_IMU_data->Gyro[2],
+            .speed_feedforward_ptr = &yaw_speed_feedforward,
         },
         .controller_setting_init_config = {
             .angle_feedback_source = OTHER_FEED,
@@ -62,6 +128,7 @@ void GimbalInit()
             .outer_loop_type = ANGLE_LOOP,
             .close_loop_type = ANGLE_LOOP | SPEED_LOOP,
             .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,
+            .feedforward_flag = SPEED_FEEDFORWARD,
         },
         .motor_type = GM6020
     };
@@ -112,28 +179,6 @@ void GimbalInit()
     chassis_imu_sub = SubRegister("chassis_imu", sizeof(attitude_t));
 }
 
-static void GimbalStabilityCalc(const attitude_t *gimbal_imu_data, const attitude_t *chassis_imu_data, GimbalComp_t *gimbal_comp)
-{
-    
-    float fb_yaw = gimbal_imu_data->Gyro[2];   // Z轴 → yaw角速度
-
-    float fb_pitch = gimbal_imu_data->Gyro[1];   // Y轴 → pitch角速度
-
-
-    float yaw_rad = chassis_imu_data->Yaw * PI / 180.0f;
-
-    float ff_yaw = -chassis_imu_data->Gyro[2];
-
-    float ff_pitch = sinf(yaw_rad) * chassis_imu_data->Gyro[0] - cosf(yaw_rad) * chassis_imu_data->Gyro[1];
-
-    gimbal_comp->yaw_speed = fb_yaw;// + ff_yaw;
-
-    gimbal_comp->pitch_speed = fb_pitch;// + ff_pitch;
-
-    //后续补充重力补偿力矩，阻力补偿力矩，加速度补偿力矩计算,主要是pitch电机的重力补偿,需要知道pitch电机的安装角度和配重质量
-    //该函数只实现对速控云台的自稳控制
-}
-
 /* 机器人云台控制核心任务,后续考虑只保留IMU控制,不再需要电机的反馈 */
 void GimbalTask()
 {
@@ -143,20 +188,6 @@ void GimbalTask()
     SubGetMessage(chassis_imu_sub, &chassis_imu_recv);
     // @todo:现在已不再需要电机反馈,实际上可以始终使用IMU的姿态数据来作为云台的反馈,yaw电机的offset只是用来跟随底盘
     // 根据控制模式进行电机反馈切换和过渡,视觉模式在robot_cmd模块就已经设置好,gimbal只看yaw_ref和pitch_ref
-    // DMMotorEnable(pitch_motor);
-    // DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
-    // DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
-    // DMMotorSetRef(pitch_motor, -5); // pitch电机的反馈使用IMU的pitch角度,不再使用电机的角度反馈
-
-    
-    // DJIMotorEnable(yaw_motor);
-    // DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
-    // DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
-    // DJIMotorSetRef(yaw_motor, 20); // yaw
-    
-    
-    
-
     switch (gimbal_cmd_recv.gimbal_mode)
     {
     // 停止
@@ -182,6 +213,9 @@ void GimbalTask()
     case GIMBAL_FREE_MODE: // 后续删除,或加入云台追地盘的跟随模式(响应速度更快)
         DJIMotorEnable(yaw_motor);
         DMMotorEnable(pitch_motor);
+
+        YawSpeedFeedforwardUpdate(gimbal_cmd_recv.yaw);
+
         DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
         DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
         DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);

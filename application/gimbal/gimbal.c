@@ -10,7 +10,11 @@
 #include "serial_print.h"
 
 
-#define YAW_SPEED_FF_K 1.2f                         // Yaw轴速度前馈系数
+#define YAW_SPEED_FF_K                      1.2f                     // Yaw轴速度前馈系数
+#define PITCH_GRAVITY_FF_K                  1.0f                     // Pitch轴重力补偿前馈系数
+#define PITCH_GRAVITY_FF_FUCTION_A          0.0f                     // 重力补偿函数的A * cosf(beta) + B * sinf(beta)
+#define PITCH_GRAVITY_FF_FUCTION_B          0.0f                     // 重力补偿函数的A * cosf(beta) + B * sinf(beta)
+
 
 /*云台外设定义*/
 static attitude_t *gimbal_IMU_data; // 云台IMU数据
@@ -26,8 +30,11 @@ static Subscriber_t *chassis_imu_sub;       // 底盘IMU消息订阅者
 static attitude_t chassis_imu_recv;         // 接收的底盘IMU数据
 /*云台控制算法定义*/
 static GimbalComp_t gimbal_comp;
-// 速度前馈
+// Yaw轴速度前馈
 static float yaw_speed_feedforward  = 0.0f;
+// Pitch轴重力补偿前馈
+static float pitch_gravity_feedforward = 0.0f;
+
 
 
 // static BMI088Instance *bmi088; // 云台IMU
@@ -89,6 +96,21 @@ static float YawSpeedFeedforwardUpdate(float target_yaw)
 
     last_target_yaw = target_yaw;
     return YAW_SPEED_FF_K * yaw_speed_feedforward;
+}
+
+/**
+ * @brief Pitch轴重力补偿
+ *
+ * @param  actual_pitch 实际pitch轴角度
+ * 
+ */
+static float PitchGravityFeedforwardUpdate(const float actual_pitch)
+{
+    float beta = actual_pitch * PI / 180.0f;
+    
+    pitch_gravity_feedforward = PITCH_GRAVITY_FF_FUCTION_A * cosf(beta) + PITCH_GRAVITY_FF_FUCTION_B * sinf(beta);
+
+    return PITCH_GRAVITY_FF_K * pitch_gravity_feedforward;
 }
 
 void GimbalInit()
@@ -160,6 +182,7 @@ void GimbalInit()
             .other_angle_feedback_ptr = &gimbal_IMU_data->Pitch,
             // 还需要增加角速度额外反馈指针,注意方向,ins_task.md中有c板的bodyframe坐标系说明
             .other_speed_feedback_ptr = (&gimbal_IMU_data->Gyro[0]),
+            .current_feedforward_ptr = &pitch_gravity_feedforward,
         },
         .controller_setting_init_config = {
             .angle_feedback_source = OTHER_FEED,
@@ -168,6 +191,7 @@ void GimbalInit()
             .close_loop_type = SPEED_LOOP | ANGLE_LOOP,
             .motor_reverse_flag = MOTOR_DIRECTION_NORMAL,
             .feedback_reverse_flag = FEEDBACK_DIRECTION_REVERSE,
+            .feedforward_flag = CURRENT_FEEDFORWARD,
         },
         .motor_type = DM4310,
     };
@@ -212,18 +236,18 @@ void GimbalTask()
         break;
     // 云台自由模式,使用编码器反馈,底盘和云台分离,仅云台旋转,一般用于调整云台姿态(英雄吊射等)/能量机关
     case GIMBAL_FREE_MODE: // 后续删除,或加入云台追地盘的跟随模式(响应速度更快)
-        DJIMotorEnable(yaw_motor);
-        DMMotorEnable(pitch_motor);
+        // DJIMotorEnable(yaw_motor);
+        // DMMotorEnable(pitch_motor);
 
-        YawSpeedFeedforwardUpdate(gimbal_cmd_recv.yaw);
+        // YawSpeedFeedforwardUpdate(gimbal_cmd_recv.yaw);
 
-        DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
-        DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
-        DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
-        DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
+        // DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
+        // DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
+        // DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
+        // DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
 
-        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
-        DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
+        // DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        // DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
 
         break;
     default:
@@ -231,7 +255,7 @@ void GimbalTask()
     }
     float error = gimbal_cmd_recv.yaw - gimbal_IMU_data->Yaw;
 
-
+    SEGGER_RTT_printf(0,"pitch:%d\n",(int16_t)gimbal_IMU_data->Pitch);
     SerialPrintf("%d,%d,%d,%d,%d\n",(int16_t)gimbal_IMU_data->Yaw,   (int16_t)gimbal_cmd_recv.yaw, 
                                      (int16_t)gimbal_IMU_data->Pitch, (int16_t)gimbal_cmd_recv.pitch, (int16_t)error);
     // 在合适的地方添加pitch重力补偿前馈力矩

@@ -9,7 +9,8 @@
 #include "can_comm.h"
 #include "serial_print.h"
 
-#define YAW_SPEED_FF_K 2.0f
+
+#define YAW_SPEED_FF_K 1.2f                         // Yaw轴速度前馈系数
 
 /*云台外设定义*/
 static attitude_t *gimbal_IMU_data; // 云台IMU数据
@@ -101,7 +102,7 @@ void GimbalInit()
         },
         .controller_param_init_config = {
             .angle_PID = {
-                .Kp = 55, // 8
+                .Kp = 65, // 8
                 .Ki = 0,
                 .Kd = 1,
                 .DeadBand = 0.1,

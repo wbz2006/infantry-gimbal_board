@@ -226,12 +226,13 @@ void DMMotorControl()
 
         // 电机停止则力矩置0
         if (motor->stop_flag == MOTOR_STOP)
+        {
             motor->motor_send_mailbox.position_des = float_to_uint(0, DM_P_MIN, DM_P_MAX, 16);
             motor->motor_send_mailbox.velocity_des = float_to_uint(0, DM_V_MIN, DM_V_MAX, 12);
             motor->motor_send_mailbox.torque_des   = float_to_uint(0, DM_T_MIN, DM_T_MAX, 12);
             motor->motor_send_mailbox.Kp           = float_to_uint(0, DM_KP_MIN, DM_KP_MAX, 12);
             motor->motor_send_mailbox.Kd           = float_to_uint(0, DM_KD_MIN, DM_KD_MAX, 12);
-
+        }
         // 按DM电机协议格式填充tx_buff（8字节）
         motor->motor_can_instace->tx_buff[0] = (uint8_t)(motor->motor_send_mailbox.position_des >> 8);
         motor->motor_can_instace->tx_buff[1] = (uint8_t)(motor->motor_send_mailbox.position_des);

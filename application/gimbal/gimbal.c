@@ -110,7 +110,7 @@ static float PitchGravityFeedforwardUpdate(const float actual_pitch)
     
     pitch_gravity_feedforward = PITCH_GRAVITY_FF_FUCTION_A * cosf(beta) + PITCH_GRAVITY_FF_FUCTION_B * sinf(beta);
 
-    return PITCH_GRAVITY_FF_K * pitch_gravity_feedforward;
+    return  -0.38; // PITCH_GRAVITY_FF_K * pitch_gravity_feedforward;
 }
 
 void GimbalInit()
@@ -199,6 +199,12 @@ void GimbalInit()
     yaw_motor = DJIMotorInit(&yaw_config);
     pitch_motor = DMMotorInit(&pitch_config);
 
+    pitch_motor->mit_config.velocity_des = 0.0f;
+    pitch_motor->mit_config.position_des = 0.0f;
+    pitch_motor->mit_config.kd           = 0.0f;
+    pitch_motor->mit_config.kp           = 0.0f;
+    pitch_motor->mit_config.torque_des   = 0.0f;
+
     gimbal_pub = PubRegister("gimbal_feed", sizeof(Gimbal_Upload_Data_s));
     gimbal_sub = SubRegister("gimbal_cmd", sizeof(Gimbal_Ctrl_Cmd_s));
     chassis_imu_sub = SubRegister("chassis_imu", sizeof(attitude_t));
@@ -240,6 +246,7 @@ void GimbalTask()
         DMMotorEnable(pitch_motor);
 
         YawSpeedFeedforwardUpdate(gimbal_cmd_recv.yaw);
+        PitchGravityFeedforwardUpdate(gimbal_IMU_data->Pitch);
 
         DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
         DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);

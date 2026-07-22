@@ -8,12 +8,16 @@
 
 #define DM_MOTOR_CNT 4
 
-#define DM_P_MIN  (-12.5f)
+#define DM_P_MIN  (-12.5f)              // 依据电机手册参数限值
 #define DM_P_MAX  12.5f
 #define DM_V_MIN  (-45.0f)
 #define DM_V_MAX  45.0f
 #define DM_T_MIN  (-18.0f)
 #define DM_T_MAX   18.0f
+#define DM_KP_MIN (-100.0f)
+#define DM_KP_MAX 100.0f
+#define DM_KD_MIN (-100.0f)
+#define DM_KD_MAX 100.0f
 
 typedef struct 
 {
@@ -28,6 +32,7 @@ typedef struct
     int32_t total_round;
 }DM_Motor_Measure_s;
 
+// 达妙电机CAN发送结构体
 typedef struct
 {
     uint16_t position_des;
@@ -36,6 +41,17 @@ typedef struct
     uint16_t Kp;
     uint16_t Kd;
 }DMMotor_Send_s;
+
+// 达妙电机MIT参数结构体
+typedef struct
+{
+    float position_des;   // rad
+    float velocity_des;   // rad/s
+    float torque_des;     // N*m
+    float kp;
+    float kd;
+} DMMotor_MIT_Config_s;
+
 typedef struct 
 {
     DM_Motor_Measure_s measure;
@@ -48,6 +64,10 @@ typedef struct
     float *speed_feedforward_ptr;
     float *current_feedforward_ptr;
     float pid_ref;
+
+    DMMotor_MIT_Config_s mit_config;
+    DMMotor_Send_s motor_send_mailbox;
+
     Motor_Working_Type_e stop_flag;
     CANInstance *motor_can_instace;
     DaemonInstance* motor_daemon;
@@ -85,6 +105,12 @@ void DMMotorChangeFeed(DMMotorInstance *motor, Closeloop_Type_e loop, Feedback_S
  * @brief 该函数被motor_task调用运行在rtos上,motor_task内通过osDelay()确定控制频率
  */
 void DMMotorControl();
+
+/**
+ * @brief 该函数作为外部接口传入MIT参数
+ */
+
+
 
 /**
  * @brief 原控制函数，每个电机有独立的 RTOS 任务（DMMotorTask），通过 DMMotorControlInit() 为每个电机创建线程，

@@ -75,6 +75,9 @@ DMMotorInstance *DMMotorInit(Motor_Init_Config_s *config)
     motor->other_angle_feedback_ptr = config->controller_param_init_config.other_angle_feedback_ptr;
     motor->other_speed_feedback_ptr = config->controller_param_init_config.other_speed_feedback_ptr;
 
+    motor->speed_feedforward_ptr = config->controller_param_init_config.speed_feedforward_ptr;
+    motor->current_feedforward_ptr = config->controller_param_init_config.current_feedforward_ptr;
+
     config->can_init_config.can_module_callback = DMMotorDecode;
     config->can_init_config.id = motor;
     motor->motor_can_instace = CANRegister(&config->can_init_config);
@@ -132,8 +135,6 @@ if (loop == ANGLE_LOOP)
  * @note  与DJI电机不同：DM电机每台独占一帧CAN，无法4台合并发送
  *        因此没有sender_group分组概念，每台电机计算完成后立即发送
  * 
- * @note  目前仅将MIT模式降级为力矩控制，位置/速度/Kp/Kd置0，视为DJI电机的电流环控制模式
- *        后续扩展位控时可修改对应值
  */
 void DMMotorControl()
 {
@@ -202,32 +203,44 @@ void DMMotorControl()
         if (motor_setting->feedback_reverse_flag == FEEDBACK_DIRECTION_REVERSE)
             pid_ref *= -1;
 
-        // 限幅：DM电机力矩范围 DM_T_MIN ~ DM_T_MAX
-        LIMIT_MIN_MAX(pid_ref, DM_T_MIN, DM_T_MAX);
+        // 限幅
+        float p_des = motor->mit_config.position_des;
+        float v_des = motor->mit_config.velocity_des;
+        float kp = motor->mit_config.kp;
+        float kd = motor->mit_config.kd;
+        float tau_des = pid_ref + motor->mit_config.torque_des;
+
+        LIMIT_MIN_MAX(p_des, DM_P_MIN, DM_P_MAX);
+        LIMIT_MIN_MAX(v_des, DM_V_MIN, DM_V_MAX);
+        LIMIT_MIN_MAX(kp, DM_KP_MIN, DM_KP_MAX);
+        LIMIT_MIN_MAX(kd, DM_KD_MIN, DM_KD_MAX);        
+        LIMIT_MIN_MAX(tau_des, DM_T_MIN, DM_T_MAX);
 
         // ==================== 填充发送数据 ====================
-        // MIT模式：目前仅力矩控制，位置/速度/Kp/Kd置0
-        // 后续扩展位控时可修改对应值
-        DMMotor_Send_s motor_send_mailbox;
-        motor_send_mailbox.position_des = float_to_uint(0, DM_P_MIN, DM_P_MAX, 16);
-        motor_send_mailbox.velocity_des = float_to_uint(0, DM_V_MIN, DM_V_MAX, 12);
-        motor_send_mailbox.torque_des   = float_to_uint(pid_ref, DM_T_MIN, DM_T_MAX, 12);
-        motor_send_mailbox.Kp = 0;
-        motor_send_mailbox.Kd = 0;
+        // MIT模式   
+        motor->motor_send_mailbox.position_des = float_to_uint(p_des, DM_P_MIN, DM_P_MAX, 16);
+        motor->motor_send_mailbox.velocity_des = float_to_uint(v_des, DM_V_MIN, DM_V_MAX, 12);
+        motor->motor_send_mailbox.torque_des   = float_to_uint(tau_des, DM_T_MIN, DM_T_MAX, 12);
+        motor->motor_send_mailbox.Kp           = float_to_uint(kp, DM_KP_MIN, DM_KP_MAX, 12);
+        motor->motor_send_mailbox.Kd           = float_to_uint(kd, DM_KD_MIN, DM_KD_MAX, 12);
 
         // 电机停止则力矩置0
         if (motor->stop_flag == MOTOR_STOP)
-            motor_send_mailbox.torque_des = float_to_uint(0, DM_T_MIN, DM_T_MAX, 12);
+            motor->motor_send_mailbox.position_des = float_to_uint(0, DM_P_MIN, DM_P_MAX, 16);
+            motor->motor_send_mailbox.velocity_des = float_to_uint(0, DM_V_MIN, DM_V_MAX, 12);
+            motor->motor_send_mailbox.torque_des   = float_to_uint(0, DM_T_MIN, DM_T_MAX, 12);
+            motor->motor_send_mailbox.Kp           = float_to_uint(0, DM_KP_MIN, DM_KP_MAX, 12);
+            motor->motor_send_mailbox.Kd           = float_to_uint(0, DM_KD_MIN, DM_KD_MAX, 12);
 
         // 按DM电机协议格式填充tx_buff（8字节）
-        motor->motor_can_instace->tx_buff[0] = (uint8_t)(motor_send_mailbox.position_des >> 8);
-        motor->motor_can_instace->tx_buff[1] = (uint8_t)(motor_send_mailbox.position_des);
-        motor->motor_can_instace->tx_buff[2] = (uint8_t)(motor_send_mailbox.velocity_des >> 4);
-        motor->motor_can_instace->tx_buff[3] = (uint8_t)(((motor_send_mailbox.velocity_des & 0xF) << 4) | (motor_send_mailbox.Kp >> 8));
-        motor->motor_can_instace->tx_buff[4] = (uint8_t)(motor_send_mailbox.Kp);
-        motor->motor_can_instace->tx_buff[5] = (uint8_t)(motor_send_mailbox.Kd >> 4);
-        motor->motor_can_instace->tx_buff[6] = (uint8_t)(((motor_send_mailbox.Kd & 0xF) << 4) | (motor_send_mailbox.torque_des >> 8));
-        motor->motor_can_instace->tx_buff[7] = (uint8_t)(motor_send_mailbox.torque_des);
+        motor->motor_can_instace->tx_buff[0] = (uint8_t)(motor->motor_send_mailbox.position_des >> 8);
+        motor->motor_can_instace->tx_buff[1] = (uint8_t)(motor->motor_send_mailbox.position_des);
+        motor->motor_can_instace->tx_buff[2] = (uint8_t)(motor->motor_send_mailbox.velocity_des >> 4);
+        motor->motor_can_instace->tx_buff[3] = (uint8_t)(((motor->motor_send_mailbox.velocity_des & 0xF) << 4) | (motor->motor_send_mailbox.Kp >> 8));
+        motor->motor_can_instace->tx_buff[4] = (uint8_t)(motor->motor_send_mailbox.Kp);
+        motor->motor_can_instace->tx_buff[5] = (uint8_t)(motor->motor_send_mailbox.Kd >> 4);
+        motor->motor_can_instace->tx_buff[6] = (uint8_t)(((motor->motor_send_mailbox.Kd & 0xF) << 4) | (motor->motor_send_mailbox.torque_des >> 8));
+        motor->motor_can_instace->tx_buff[7] = (uint8_t)(motor->motor_send_mailbox.torque_des);
 
         // DM电机每台单独发送一帧CAN（无法分组）
         CANTransmit(motor->motor_can_instace, 1);

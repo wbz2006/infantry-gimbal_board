@@ -39,6 +39,53 @@ static float pitch_gravity_feedforward = 0.0f;
 
 // static BMI088Instance *bmi088; // 云台IMU
 
+#define YAW_SINE_AMPLITUDE_DEG    30.0f   // 正弦幅值，单位：度
+#define YAW_SINE_FREQ_HZ          0.2f    // 频率，0.2Hz = 5秒一个周期
+#define YAW_SINE_SPEED_FF_K       1.0f    // 速度前馈系数
+
+static float YawSineRefUpdate(float current_yaw_total)
+{
+    static uint8_t initialized = 0;
+    static uint32_t last_tick = 0;
+    static float yaw_center = 0.0f;
+    static float phase = 0.0f;
+
+    float dt = DWT_GetDeltaT(&last_tick);
+
+    if (!initialized)
+    {
+        initialized = 1;
+        yaw_center = current_yaw_total;   // 以上电当前角度为正弦中心，避免突然跳变
+        phase = 0.0f;
+        yaw_speed_feedforward = 0.0f;
+        return yaw_center;
+    }
+
+    if (dt <= 0.0001f || dt > 0.02f)
+    {
+        yaw_speed_feedforward = 0.0f;
+        return yaw_center + YAW_SINE_AMPLITUDE_DEG * sinf(phase);
+    }
+
+    float omega = 2.0f * PI * YAW_SINE_FREQ_HZ;
+
+    phase += omega * dt;
+
+    if (phase > 2.0f * PI)
+    {
+        phase -= 2.0f * PI;
+    }
+
+    float yaw_ref = yaw_center + YAW_SINE_AMPLITUDE_DEG * sinf(phase);
+
+    yaw_speed_feedforward =
+        YAW_SINE_SPEED_FF_K * YAW_SINE_AMPLITUDE_DEG * omega * cosf(phase);
+
+    LIMIT_MIN_MAX(yaw_speed_feedforward, -300.0f, 300.0f);
+
+    return yaw_ref;
+}
+
 
 static void GimbalStabilityCalc(const attitude_t *gimbal_imu_data, const attitude_t *chassis_imu_data, GimbalComp_t *gimbal_comp)
 {
@@ -245,25 +292,29 @@ void GimbalTask()
         DJIMotorEnable(yaw_motor);
         DMMotorEnable(pitch_motor);
 
-        YawSpeedFeedforwardUpdate(gimbal_cmd_recv.yaw);
+        // YawSpeedFeedforwardUpdate(gimbal_cmd_recv.yaw);
         PitchGravityFeedforwardUpdate(gimbal_IMU_data->Pitch);
+        float yaw_ref = YawSineRefUpdate(gimbal_IMU_data->YawTotalAngle);
+
 
         DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
         DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
         DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
         DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
 
-        DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
+        DJIMotorSetRef(yaw_motor, yaw_ref); // yaw和pitch会在robot_cmd中处理好多圈和单圈
         DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
-
+        
+        float error = yaw_ref - gimbal_IMU_data->YawTotalAngle;
+        SerialPrintf("%d,%d,%d,%d,%d\n",(int16_t)gimbal_IMU_data->Yaw,   (int16_t)gimbal_cmd_recv.yaw, 
+                                     (int16_t)gimbal_IMU_data->Pitch, (int16_t)gimbal_cmd_recv.pitch, (int16_t)error);
         break;
     default:
         break;
     }
-    float error = gimbal_cmd_recv.yaw - gimbal_IMU_data->Yaw;
+    
 
-    SerialPrintf("%d,%d,%d,%d,%d\n",(int16_t)gimbal_IMU_data->Yaw,   (int16_t)gimbal_cmd_recv.yaw, 
-                                     (int16_t)gimbal_IMU_data->Pitch, (int16_t)gimbal_cmd_recv.pitch, (int16_t)error);
+    
     // 在合适的地方添加pitch重力补偿前馈力矩
     // 根据IMU姿态/pitch电机角度反馈计算出当前配重下的重力矩
     // ...

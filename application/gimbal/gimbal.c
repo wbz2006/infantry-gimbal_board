@@ -39,8 +39,8 @@ static float pitch_gravity_feedforward = 0.0f;
 
 // static BMI088Instance *bmi088; // 云台IMU
 
-#define YAW_SINE_AMPLITUDE_DEG    30.0f   // 正弦幅值，单位：度
-#define YAW_SINE_FREQ_HZ          0.2f    // 频率，0.2Hz = 5秒一个周期
+#define YAW_SINE_AMPLITUDE_DEG    60.0f   // 正弦幅值，单位：度
+#define YAW_SINE_FREQ_HZ          0.6f    // 频率，0.2Hz = 5秒一个周期
 #define YAW_SINE_SPEED_FF_K       1.0f    // 速度前馈系数
 
 static float YawSineRefUpdate(float current_yaw_total)
@@ -157,7 +157,7 @@ static float PitchGravityFeedforwardUpdate(const float actual_pitch)
     
     pitch_gravity_feedforward = PITCH_GRAVITY_FF_FUCTION_A * cosf(beta) + PITCH_GRAVITY_FF_FUCTION_B * sinf(beta);
 
-    return  -0.38; // PITCH_GRAVITY_FF_K * pitch_gravity_feedforward;
+    return  0.38; // PITCH_GRAVITY_FF_K * pitch_gravity_feedforward;
 }
 
 void GimbalInit()
@@ -306,8 +306,8 @@ void GimbalTask()
         DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
         
         float error = yaw_ref - gimbal_IMU_data->YawTotalAngle;
-        SerialPrintf("%d,%d,%d,%d,%d\n",(int16_t)gimbal_IMU_data->Yaw,   (int16_t)gimbal_cmd_recv.yaw, 
-                                     (int16_t)gimbal_IMU_data->Pitch, (int16_t)gimbal_cmd_recv.pitch, (int16_t)error);
+        SerialPrintf("%f,%f,%f,%f,%f\n",gimbal_IMU_data->Yaw,   yaw_ref, 
+                                     gimbal_IMU_data->Pitch, gimbal_cmd_recv.pitch, error);
         break;
     default:
         break;
